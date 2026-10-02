@@ -171,7 +171,10 @@
       <span class="help-dot">?</span>
     </div>
     <div class="scan-frame-wrap">
-      <div id="reader" class="reader"></div>
+      <div id="reader" class="reader">
+        <video id="cameraVideo" class="camera-video" autoplay muted playsinline></video>
+        <canvas id="scanCanvas" class="scan-canvas" hidden></canvas>
+      </div>
       <div class="scan-corners" aria-hidden="true"></div>
     </div>
     <p id="scannerStatus" class="muted">Autorise la caméra puis vise le code EAN/UPC.</p>
@@ -280,7 +283,7 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="./app.js"></script>
+  <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js"></script>
+  <script src="./app.js?v=20261002-3"></script>
 </body>
 </html>
