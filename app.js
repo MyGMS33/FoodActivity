@@ -8,8 +8,6 @@ const DEFAULT_STATE = {
 let state = loadState();
 let scanner = null;
 let scannerRunning = false;
-let cameraDevices = [];
-let selectedCameraId = null;
 let currentRecommendation = [];
 
 const $ = (id) => document.getElementById(id);
@@ -448,123 +446,34 @@ function updateRecommendationTotals() {
   $("recommendationNote").textContent = note.join(" ");
 }
 
-async function loadCameraDevices() {
-  if (!window.Html5Qrcode) return [];
-  try {
-    cameraDevices = await Html5Qrcode.getCameras();
-  } catch (error) {
-    console.warn("Impossible de lister les caméras", error);
-    cameraDevices = [];
-  }
-  renderCameraChoices();
-  return cameraDevices;
-}
-
-function renderCameraChoices() {
-  const select = $("cameraSelect");
-  if (!select) return;
-
-  const previous = selectedCameraId || select.value;
-  select.innerHTML = "";
-
-  if (!cameraDevices.length) {
-    const option = document.createElement("option");
-    option.value = "";
-    option.textContent = "Caméra arrière automatique";
-    select.append(option);
-    return;
-  }
-
-  cameraDevices.forEach((device, index) => {
-    const option = document.createElement("option");
-    option.value = device.id;
-    const label = device.label?.trim() || `Caméra ${index + 1}`;
-    option.textContent = `${index + 1}. ${label}`;
-    select.append(option);
-  });
-
-  if (previous && cameraDevices.some((device) => device.id === previous)) {
-    select.value = previous;
-  } else if (selectedCameraId) {
-    select.value = selectedCameraId;
-  }
-}
-
-function preferredRearCameraId(devices) {
-  if (!devices.length) return null;
-
-  const scored = devices.map((device, index) => {
-    const label = (device.label || "").toLowerCase();
-    let score = 0;
-    if (/back|rear|environment|arrière|rück|trasera/.test(label)) score += 20;
-    if (/camera2\s*0|camera 0/.test(label)) score += 8;
-    if (/front|user|avant|selfie/.test(label)) score -= 30;
-    if (/wide|ultra|0\.6|macro/.test(label)) score -= 4;
-    return { device, index, score };
-  });
-
-  scored.sort((a, b) => b.score - a.score || a.index - b.index);
-  return scored[0].score > 0 ? scored[0].device.id : null;
-}
-
-function scannerConfig() {
-  return {
-    fps: 20,
-    qrbox: (viewfinderWidth, viewfinderHeight) => {
-      const width = Math.min(360, Math.floor(viewfinderWidth * 0.92));
-      const height = Math.min(155, Math.floor(viewfinderHeight * 0.42));
-      return { width: Math.max(220, width), height: Math.max(100, height) };
-    },
-    aspectRatio: 1.777778,
-    disableFlip: true,
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-  };
-}
-
-function createScannerInstance() {
-  const config = {
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-  };
-
-  if (window.Html5QrcodeSupportedFormats) {
-    config.formatsToSupport = [
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.CODE_128
-    ].filter(Boolean);
-  }
-
-  return new Html5Qrcode("reader", config);
-}
-
-async function startScanner(cameraId = null) {
+async function startScanner() {
   if (!window.Html5Qrcode) {
     toast("Scanner indisponible. Utilise la saisie du code-barres.");
     return;
   }
 
   if (!$("scannerDialog").open) $("scannerDialog").showModal();
-  $("scannerStatus").textContent = "Démarrage de la caméra…";
-  $("zoomControl").hidden = true;
+  $("scannerStatus").textContent = "Ouverture de la caméra…";
 
   try {
-    if (!cameraDevices.length) await loadCameraDevices();
-
     if (scannerRunning) await stopScanner();
 
-    scanner = createScannerInstance();
-
-    let cameraSource = cameraId;
-    if (!cameraSource) {
-      const preferred = preferredRearCameraId(cameraDevices);
-      cameraSource = preferred || { facingMode: { ideal: "environment" } };
-    }
+    scanner = new Html5Qrcode("reader", {
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    });
 
     await scanner.start(
-      cameraSource,
-      scannerConfig(),
+      { facingMode: "environment" },
+      {
+        fps: 15,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const width = Math.max(240, Math.min(360, Math.floor(viewfinderWidth * 0.9)));
+          const height = Math.max(110, Math.min(160, Math.floor(viewfinderHeight * 0.42)));
+          return { width, height };
+        },
+        aspectRatio: 1.777778,
+        disableFlip: true
+      },
       async (decodedText) => {
         if (!scannerRunning) return;
         await stopScanner();
@@ -575,21 +484,14 @@ async function startScanner(cameraId = null) {
     );
 
     scannerRunning = true;
-    selectedCameraId = typeof cameraSource === "string" ? cameraSource : null;
-
-    renderCameraChoices();
-    if (selectedCameraId && $("cameraSelect")) $("cameraSelect").value = selectedCameraId;
-
-    await optimiseCameraForBarcode();
-    setupCameraZoom();
-
-    $("scannerStatus").textContent =
-      "Vise le code-barres. Pour un petit code : essaie 2×, puis « Mise au point », ou change de caméra arrière.";
+    await enableContinuousFocus();
+    updateZoomButtons(1);
+    $("scannerStatus").textContent = "Caméra prête. Pour un petit code, essaie 2× puis « Mise au point ».";
   } catch (error) {
     console.error(error);
     scannerRunning = false;
-    $("scannerStatus").textContent =
-      "Impossible de démarrer cette caméra. Essaie une autre caméra arrière ou « Photo rapprochée ».";
+    $("scannerStatus").textContent = "Impossible d’ouvrir la caméra. Vérifie l’autorisation caméra de Chrome puis réessaie.";
+    toast("La caméra n’a pas pu s’ouvrir.");
   }
 }
 
@@ -598,17 +500,7 @@ function getCameraTrack() {
   return video?.srcObject?.getVideoTracks?.()[0] || null;
 }
 
-function getScannerCapabilities() {
-  try {
-    if (scanner?.getRunningTrackCapabilities) return scanner.getRunningTrackCapabilities();
-  } catch {}
-  try {
-    if (scanner?.getRunningTrackCameraCapabilities) {
-      const cameraCaps = scanner.getRunningTrackCameraCapabilities();
-      if (cameraCaps?.zoomFeature) return { zoom: cameraCaps.zoomFeature };
-      return cameraCaps || {};
-    }
-  } catch {}
+function getCameraCapabilities() {
   try {
     return getCameraTrack()?.getCapabilities?.() || {};
   } catch {
@@ -616,174 +508,97 @@ function getScannerCapabilities() {
   }
 }
 
-async function applyScannerConstraints(constraints) {
-  if (!scannerRunning) throw new Error("Scanner arrêté");
-
-  if (scanner?.applyVideoConstraints) {
-    return scanner.applyVideoConstraints(constraints);
-  }
-
+async function applyTrackConstraints(constraints) {
   const track = getCameraTrack();
   if (!track?.applyConstraints) throw new Error("Contraintes caméra indisponibles");
   return track.applyConstraints(constraints);
 }
 
-async function optimiseCameraForBarcode() {
-  const caps = getScannerCapabilities();
-  const advanced = [];
+async function enableContinuousFocus() {
+  const caps = getCameraCapabilities();
+  if (!Array.isArray(caps.focusMode) || !caps.focusMode.includes("continuous")) return false;
 
-  if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) {
-    advanced.push({ focusMode: "continuous" });
-  }
-
-  if (Array.isArray(caps.exposureMode) && caps.exposureMode.includes("continuous")) {
-    advanced.push({ exposureMode: "continuous" });
-  }
-
-  if (advanced.length) {
-    try {
-      await applyScannerConstraints({ advanced });
-    } catch (error) {
-      console.warn("Optimisation autofocus non appliquée", error);
-    }
-  }
-}
-
-function zoomCapability() {
-  const caps = getScannerCapabilities();
-  const zoom = caps?.zoom;
-  if (zoom && Number.isFinite(Number(zoom.min)) && Number.isFinite(Number(zoom.max))) {
-    return {
-      min: Number(zoom.min),
-      max: Number(zoom.max),
-      step: Number(zoom.step) || 0.1
-    };
-  }
-
-  const cameraZoom = caps?.zoomFeature;
-  if (cameraZoom && Number.isFinite(Number(cameraZoom.min)) && Number.isFinite(Number(cameraZoom.max))) {
-    return {
-      min: Number(cameraZoom.min),
-      max: Number(cameraZoom.max),
-      step: Number(cameraZoom.step) || 0.1
-    };
-  }
-
-  return null;
-}
-
-async function setCameraZoom(requestedZoom) {
-  const zoom = zoomCapability();
-  if (!zoom) {
-    const rearLike = cameraDevices.filter((device) => !/front|user|avant|selfie/i.test(device.label || ""));
-    if (requestedZoom >= 2 && rearLike.length > 1) {
-      const currentIndex = rearLike.findIndex((device) => device.id === selectedCameraId);
-      const next = rearLike[(currentIndex + 1 + rearLike.length) % rearLike.length];
-      if (next && next.id !== selectedCameraId) {
-        toast("Le navigateur ne donne pas accès au zoom. J’essaie une autre caméra arrière.");
-        await startScanner(next.id);
-        return true;
-      }
-    }
-
-    toast("Chrome n’expose pas le zoom de cette caméra. Utilise une autre caméra arrière ou la photo rapprochée.");
-    return false;
-  }
-
-  const value = clamp(Number(requestedZoom), zoom.min, zoom.max);
   try {
-    await applyScannerConstraints({ advanced: [{ zoom: value }] });
-    const slider = $("scannerZoom");
-    const label = $("zoomValue");
-    if (slider) slider.value = String(value);
-    if (label) label.textContent = `${round(value, 1)}×`;
-    toast(`Zoom ${round(value, 1)}× appliqué`);
+    await applyTrackConstraints({ advanced: [{ focusMode: "continuous" }] });
     return true;
-  } catch (error) {
-    console.warn("Zoom refusé", error);
-    toast("Le navigateur refuse le zoom sur cette caméra.");
+  } catch {
     return false;
   }
+}
+
+function updateZoomButtons(value) {
+  const one = $("zoom1Btn");
+  const two = $("zoom2Btn");
+  if (one) one.classList.toggle("active", value < 1.5);
+  if (two) two.classList.toggle("active", value >= 1.5);
+}
+
+async function setCameraZoom(targetZoom) {
+  if (!scannerRunning) {
+    toast("Ouvre d’abord la caméra.");
+    return;
+  }
+
+  const caps = getCameraCapabilities();
+  const zoom = caps.zoom;
+
+  if (zoom && Number.isFinite(Number(zoom.min)) && Number.isFinite(Number(zoom.max))) {
+    const min = Number(zoom.min);
+    const max = Number(zoom.max);
+    const value = clamp(Number(targetZoom), min, max);
+
+    try {
+      await applyTrackConstraints({ advanced: [{ zoom: value }] });
+      updateZoomButtons(value);
+      $("scannerStatus").textContent = `Zoom ${round(value, 1)}× actif. Maintiens le code bien au centre.`;
+      return;
+    } catch (error) {
+      console.warn("Zoom caméra refusé", error);
+    }
+  }
+
+  const video = document.querySelector("#reader video");
+  if (video) {
+    video.classList.toggle("digital-zoom-2", targetZoom >= 2);
+    updateZoomButtons(targetZoom);
+  }
+
+  $("scannerStatus").textContent =
+    targetZoom >= 2
+      ? "Chrome ne donne pas accès au zoom matériel : aperçu agrandi en 2×. Utilise « Mise au point » si l’image est floue."
+      : "Zoom 1×.";
 }
 
 async function refocusCamera() {
-  const caps = getScannerCapabilities();
+  if (!scannerRunning) {
+    toast("Ouvre d’abord la caméra.");
+    return;
+  }
+
+  const caps = getCameraCapabilities();
   const focusModes = Array.isArray(caps.focusMode) ? caps.focusMode : [];
 
   try {
     if (focusModes.includes("single-shot")) {
-      await applyScannerConstraints({ advanced: [{ focusMode: "single-shot" }] });
-      toast("Mise au point relancée.");
-      setTimeout(() => {
-        if (scannerRunning && focusModes.includes("continuous")) {
-          applyScannerConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(() => {});
-        }
-      }, 700);
+      await applyTrackConstraints({ advanced: [{ focusMode: "single-shot" }] });
+      $("scannerStatus").textContent = "Mise au point relancée.";
+      setTimeout(() => enableContinuousFocus(), 700);
       return;
     }
 
     if (focusModes.includes("continuous")) {
-      await applyScannerConstraints({ advanced: [{ focusMode: "continuous" }] });
-      toast("Autofocus continu activé.");
+      await applyTrackConstraints({ advanced: [{ focusMode: "continuous" }] });
+      $("scannerStatus").textContent = "Autofocus continu activé.";
       return;
     }
-
-    const track = getCameraTrack();
-    if (track?.applyConstraints) {
-      const current = track.getConstraints?.() || {};
-      await track.applyConstraints({ ...current, focusMode: "continuous" });
-      toast("Tentative de mise au point envoyée.");
-      return;
-    }
-
-    toast("Cette caméra ne permet pas de piloter la mise au point depuis Chrome.");
   } catch (error) {
-    console.warn("Refocus non disponible", error);
-    toast("La mise au point manuelle n’est pas exposée par cette caméra.");
-  }
-}
-
-function setupCameraZoom() {
-  const control = $("zoomControl");
-  const slider = $("scannerZoom");
-  const value = $("zoomValue");
-  const note = $("cameraCapabilityNote");
-  if (!control || !slider || !value) return;
-
-  const zoom = zoomCapability();
-  if (!zoom || zoom.max <= zoom.min) {
-    control.hidden = true;
-    if (note) {
-      note.textContent =
-        "Cette caméra ne fournit pas son zoom à Chrome. Essaie le bouton 2× : FoodActivity tentera une autre caméra arrière. Sinon utilise « Photo rapprochée », qui ouvre la caméra native.";
-    }
-    return;
+    console.warn("Autofocus non pilotable", error);
   }
 
-  const settings = (() => {
-    try {
-      if (scanner?.getRunningTrackSettings) return scanner.getRunningTrackSettings();
-    } catch {}
-    try { return getCameraTrack()?.getSettings?.() || {}; } catch { return {}; }
-  })();
-
-  const current = clamp(Number(settings.zoom) || zoom.min, zoom.min, zoom.max);
-  slider.min = String(zoom.min);
-  slider.max = String(zoom.max);
-  slider.step = String(zoom.step);
-  slider.value = String(current);
-  value.textContent = `${round(current, 1)}×`;
-  control.hidden = false;
-
-  if (note) note.textContent = `Zoom caméra disponible de ${round(zoom.min, 1)}× à ${round(zoom.max, 1)}×.`;
-
-  slider.oninput = () => setCameraZoom(Number(slider.value));
-}
-
-async function switchScannerCamera(cameraId) {
-  if (!cameraId || cameraId === selectedCameraId) return;
-  $("scannerStatus").textContent = "Changement de caméra…";
-  await startScanner(cameraId);
+  $("scannerStatus").textContent = "Je relance la caméra pour forcer une nouvelle mise au point…";
+  await stopScanner();
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  await startScanner();
 }
 
 async function scanBarcodePhoto(file) {
@@ -830,11 +645,6 @@ if (barcodePhotoInput) {
     const file = event.target.files?.[0];
     if (file) scanBarcodePhoto(file);
   });
-}
-
-const cameraSelect = $("cameraSelect");
-if (cameraSelect) {
-  cameraSelect.addEventListener("change", () => switchScannerCamera(cameraSelect.value));
 }
 
 const zoom1Btn = $("zoom1Btn");
