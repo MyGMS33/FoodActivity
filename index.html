@@ -177,15 +177,28 @@
     <p id="scannerStatus" class="muted">Autorise la caméra puis vise le code EAN/UPC.</p>
 
     <div class="small-barcode-tools">
+      <div class="camera-tools">
+        <label for="cameraSelect">Caméra arrière</label>
+        <select id="cameraSelect" class="camera-select" aria-label="Choisir la caméra arrière"></select>
+      </div>
+
+      <div class="camera-action-row">
+        <button id="zoom1Btn" class="btn btn-small camera-action" type="button">1×</button>
+        <button id="zoom2Btn" class="btn btn-small camera-action" type="button">2×</button>
+        <button id="refocusBtn" class="btn btn-small camera-action" type="button">◎ Mise au point</button>
+      </div>
+
       <div id="zoomControl" class="zoom-control" hidden>
         <label for="scannerZoom">Zoom caméra <strong id="zoomValue">1×</strong></label>
         <input id="scannerZoom" type="range" min="1" max="1" step="0.1" value="1">
       </div>
+
       <label class="photo-scan-btn">
-        📷 Photographier un petit code-barres
+        📷 Photo rapprochée du code-barres
         <input id="barcodePhotoInput" type="file" accept="image/*" capture="environment">
       </label>
-      <p class="scan-tip">Petit code sur un bocal : évite les reflets, garde le code le plus plat possible et remplis presque toute la largeur du cadre.</p>
+
+      <p id="cameraCapabilityNote" class="scan-tip">Pour un petit code, essaie d’abord 2× puis « Mise au point ». Si le navigateur n’expose pas le zoom optique, choisis une autre caméra arrière dans la liste ou utilise la photo rapprochée.</p>
     </div>
 
     <form id="barcodeForm" class="barcode-form scanner-barcode">
