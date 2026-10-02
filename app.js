@@ -932,8 +932,15 @@ $("scannerDialog").addEventListener("cancel", async () => {
 });
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(console.error);
+  window.addEventListener("load", async () => {
+    try {
+      const registration = await navigator.serviceWorker.register("./sw.js", {
+        updateViaCache: "none"
+      });
+      registration.update().catch(() => {});
+    } catch (error) {
+      console.error(error);
+    }
   });
 }
 
