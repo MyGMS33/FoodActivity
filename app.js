@@ -574,6 +574,7 @@ $("validateMealBtn").addEventListener("click", () => {
 
   currentRecommendation = [];
   $("recommendationSection").hidden = true;
+  document.body.classList.remove("recommendation-mode");
   saveState();
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -584,6 +585,7 @@ $("clearSelectionBtn").addEventListener("click", () => {
   state.selected = [];
   currentRecommendation = [];
   $("recommendationSection").hidden = true;
+  document.body.classList.remove("recommendation-mode");
   saveState();
   render();
 });
