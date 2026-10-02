@@ -788,3 +788,30 @@ body.recommendation-mode #recommendationSection {
 .camera-action {
   min-height: 44px;
 }
+
+
+.camera-action-row.simple {
+  grid-template-columns: 72px 72px 1fr;
+}
+.camera-action.active {
+  background: var(--green);
+  color: #102014;
+  border-color: transparent;
+}
+.focus-action {
+  min-width: 0;
+}
+#reader {
+  position: relative;
+  overflow: hidden;
+}
+#reader video {
+  transform-origin: center center;
+  transition: transform .18s ease;
+}
+#reader video.digital-zoom-2 {
+  transform: scale(2);
+}
+.secondary-fallback {
+  opacity: .9;
+}
