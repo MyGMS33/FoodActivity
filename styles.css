@@ -708,3 +708,51 @@ body.recommendation-mode #recommendationSection {
   .motivation-copy { font-size: 20px; }
   .motivation-art { font-size: 42px; }
 }
+
+
+.small-barcode-tools {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.zoom-control {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #181d20;
+}
+.zoom-control label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  color: #dfe4e1;
+  font-size: 12px;
+}
+.zoom-control input[type="range"] {
+  padding: 0;
+  accent-color: var(--green);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.photo-scan-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  color: var(--text);
+  background: #202529;
+  font-weight: 800;
+  text-align: center;
+}
+.photo-scan-btn input { display: none; }
+.scan-tip {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
