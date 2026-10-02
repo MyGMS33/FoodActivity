@@ -105,6 +105,25 @@ function renderSelected() {
   $("selectedTitle").textContent = `${count} aliment${count > 1 ? "s" : ""}`;
   $("clearSelectionBtn").hidden = count === 0;
   $("composeBtn").disabled = count === 0;
+  const stickyCompose = document.querySelector(".sticky-compose");
+  if (stickyCompose) stickyCompose.hidden = count === 0;
+
+  const scannerCount = $("scannerDetectedCount");
+  if (scannerCount) scannerCount.textContent = String(count);
+  const scannerList = $("scannerFoodList");
+  if (scannerList) {
+    scannerList.innerHTML = count
+      ? state.selected.map((food) => `
+          <div class="scanner-food-mini">
+            <div>
+              <strong>${escapeHtml(food.name)}</strong>
+              <small>${Math.round(food.available)} g disponibles · ${round(food.per100.kcal)} kcal/100g</small>
+            </div>
+            <span class="scanner-check">✓</span>
+          </div>`).join("")
+      : '<div class="muted">Aucun produit détecté pour le moment.</div>';
+  }
+
   $("composeHint").textContent = count
     ? `${count} aliment${count > 1 ? "s" : ""} prêt${count > 1 ? "s" : ""} à être réparti${count > 1 ? "s" : ""}.`
     : "Ajoute au moins un aliment.";
@@ -499,6 +518,7 @@ $("productForm").addEventListener("submit", (event) => {
 
   currentRecommendation = [];
   $("recommendationSection").hidden = true;
+  document.body.classList.remove("recommendation-mode");
   saveState();
   $("productDialog").close();
   render();
@@ -520,6 +540,7 @@ $("composeBtn").addEventListener("click", () => {
     return;
   }
 
+  document.body.classList.add("recommendation-mode");
   renderRecommendation();
 });
 
@@ -608,3 +629,25 @@ if ("serviceWorker" in navigator) {
 }
 
 render();
+
+
+const recommendationBackBtn = $("recommendationBackBtn");
+if (recommendationBackBtn) {
+  recommendationBackBtn.addEventListener("click", () => {
+    document.body.classList.remove("recommendation-mode");
+    $("recommendationSection").hidden = true;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+
+const adjustMealBtn = $("adjustMealBtn");
+if (adjustMealBtn) {
+  adjustMealBtn.addEventListener("click", () => {
+    const first = document.querySelector(".rec-grams");
+    if (first) {
+      first.focus();
+      first.scrollIntoView({ behavior: "smooth", block: "center" });
+      toast("Tu peux modifier directement les quantités.");
+    }
+  });
+}
