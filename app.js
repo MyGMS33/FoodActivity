@@ -8,6 +8,10 @@ const DEFAULT_STATE = {
 let state = loadState();
 let scanner = null;
 let scannerRunning = false;
+let cameraStream = null;
+let scanTimer = null;
+let scanBusy = false;
+let digitalZoom = 1;
 let currentRecommendation = [];
 
 const $ = (id) => document.getElementById(id);
@@ -446,58 +450,135 @@ function updateRecommendationTotals() {
   $("recommendationNote").textContent = note.join(" ");
 }
 
+function zxingReader() {
+  if (!window.ZXingBrowser?.BrowserMultiFormatReader) return null;
+  if (!scanner) scanner = new ZXingBrowser.BrowserMultiFormatReader();
+  return scanner;
+}
+
+function scoreCamera(device) {
+  const label = (device.label || "").toLowerCase();
+  let score = 0;
+  if (/camera2\s*0/.test(label)) score += 100;
+  if (/back|rear|environment|arrière|trasera|achter/.test(label)) score += 60;
+  if (/main|wide/.test(label) && !/ultra/.test(label)) score += 15;
+  if (/front|user|selfie|avant/.test(label)) score -= 150;
+  if (/ultra|0\.6|macro|depth/.test(label)) score -= 15;
+  return score;
+}
+
+async function bestRearCameraDevice() {
+  try {
+    const devices = (await navigator.mediaDevices.enumerateDevices())
+      .filter((device) => device.kind === "videoinput");
+    if (!devices.length) return null;
+    return [...devices].sort((a, b) => scoreCamera(b) - scoreCamera(a))[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+async function requestCameraStream() {
+  const baseVideo = {
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+    frameRate: { ideal: 30, max: 30 }
+  };
+
+  let preferred = await bestRearCameraDevice();
+
+  // On Android, labels can be hidden until camera permission has been granted once.
+  if (!preferred || !(preferred.label || "").trim()) {
+    const permissionStream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { ...baseVideo, facingMode: { ideal: "environment" } }
+    });
+
+    const permissionTrack = permissionStream.getVideoTracks()[0];
+    const firstSettings = permissionTrack?.getSettings?.() || {};
+    const firstDeviceId = firstSettings.deviceId || null;
+
+    preferred = await bestRearCameraDevice();
+
+    if (!preferred || !preferred.deviceId || preferred.deviceId === firstDeviceId) {
+      return permissionStream;
+    }
+
+    permissionStream.getTracks().forEach((track) => track.stop());
+  }
+
+  if (preferred?.deviceId) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { ...baseVideo, deviceId: { exact: preferred.deviceId } }
+      });
+    } catch (error) {
+      console.warn("Caméra arrière préférée refusée, fallback environment", error);
+    }
+  }
+
+  return navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: { ...baseVideo, facingMode: { ideal: "environment" } }
+  });
+}
+
 async function startScanner() {
-  if (!window.Html5Qrcode) {
-    toast("Scanner indisponible. Utilise la saisie du code-barres.");
+  if (!navigator.mediaDevices?.getUserMedia) {
+    toast("Ce navigateur ne permet pas l’accès à la caméra.");
+    return;
+  }
+
+  if (!zxingReader()) {
+    toast("Le lecteur de code-barres n’a pas chargé. Recharge l’application.");
     return;
   }
 
   if (!$("scannerDialog").open) $("scannerDialog").showModal();
-  $("scannerStatus").textContent = "Ouverture de la caméra…";
+  $("scannerStatus").textContent = "Ouverture de la caméra intégrée…";
 
   try {
-    if (scannerRunning) await stopScanner();
+    await stopScanner();
 
-    scanner = new Html5Qrcode("reader", {
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-    });
+    cameraStream = await requestCameraStream();
+    const video = $("cameraVideo");
+    if (!video) throw new Error("Élément vidéo introuvable");
 
-    await scanner.start(
-      { facingMode: "environment" },
-      {
-        fps: 15,
-        qrbox: (viewfinderWidth, viewfinderHeight) => {
-          const width = Math.max(240, Math.min(360, Math.floor(viewfinderWidth * 0.9)));
-          const height = Math.max(110, Math.min(160, Math.floor(viewfinderHeight * 0.42)));
-          return { width, height };
-        },
-        aspectRatio: 1.777778,
-        disableFlip: true
-      },
-      async (decodedText) => {
-        if (!scannerRunning) return;
-        await stopScanner();
-        $("scannerDialog").close();
-        lookupBarcode(decodedText);
-      },
-      () => {}
-    );
-
-    scannerRunning = true;
-    await enableContinuousFocus();
+    video.srcObject = cameraStream;
+    video.classList.remove("digital-zoom-2");
+    digitalZoom = 1;
     updateZoomButtons(1);
-    $("scannerStatus").textContent = "Caméra prête. Pour un petit code, essaie 2× puis « Mise au point ».";
+
+    await video.play();
+    scannerRunning = true;
+
+    await enableContinuousFocus();
+    const track = getCameraTrack();
+    const label = track?.label ? ` — ${track.label}` : "";
+    $("scannerStatus").textContent =
+      `Caméra prête${label}. Pour un petit code, centre-le puis essaie 2× et « Mise au point ».`;
+
+    scheduleDecode();
   } catch (error) {
-    console.error(error);
+    console.error("Camera start error", error);
     scannerRunning = false;
-    $("scannerStatus").textContent = "Impossible d’ouvrir la caméra. Vérifie l’autorisation caméra de Chrome puis réessaie.";
-    toast("La caméra n’a pas pu s’ouvrir.");
+    const name = error?.name || "";
+    let message = "Impossible d’ouvrir la caméra.";
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      message = "Accès caméra refusé. Dans Android : Paramètres > Applications > Chrome > Autorisations > Caméra > Autoriser.";
+    } else if (name === "NotReadableError") {
+      message = "La caméra est déjà utilisée ou bloquée. Ferme l’appareil photo/une autre appli caméra puis réessaie.";
+    } else if (name === "OverconstrainedError") {
+      message = "Cette caméra refuse les réglages demandés. Réessaie : FoodActivity utilisera un réglage plus simple.";
+    }
+    $("scannerStatus").textContent = message;
+    toast(message);
   }
 }
 
 function getCameraTrack() {
-  const video = document.querySelector("#reader video");
-  return video?.srcObject?.getVideoTracks?.()[0] || null;
+  return cameraStream?.getVideoTracks?.()[0] || null;
 }
 
 function getCameraCapabilities() {
@@ -516,8 +597,8 @@ async function applyTrackConstraints(constraints) {
 
 async function enableContinuousFocus() {
   const caps = getCameraCapabilities();
-  if (!Array.isArray(caps.focusMode) || !caps.focusMode.includes("continuous")) return false;
-
+  const modes = Array.isArray(caps.focusMode) ? caps.focusMode : [];
+  if (!modes.includes("continuous")) return false;
   try {
     await applyTrackConstraints({ advanced: [{ focusMode: "continuous" }] });
     return true;
@@ -541,32 +622,30 @@ async function setCameraZoom(targetZoom) {
 
   const caps = getCameraCapabilities();
   const zoom = caps.zoom;
+  const video = $("cameraVideo");
 
   if (zoom && Number.isFinite(Number(zoom.min)) && Number.isFinite(Number(zoom.max))) {
-    const min = Number(zoom.min);
-    const max = Number(zoom.max);
-    const value = clamp(Number(targetZoom), min, max);
-
+    const value = clamp(Number(targetZoom), Number(zoom.min), Number(zoom.max));
     try {
       await applyTrackConstraints({ advanced: [{ zoom: value }] });
+      digitalZoom = 1;
+      video?.classList.remove("digital-zoom-2");
       updateZoomButtons(value);
-      $("scannerStatus").textContent = `Zoom ${round(value, 1)}× actif. Maintiens le code bien au centre.`;
+      $("scannerStatus").textContent = `Zoom matériel ${round(value, 1)}× actif.`;
       return;
     } catch (error) {
-      console.warn("Zoom caméra refusé", error);
+      console.warn("Zoom matériel refusé", error);
     }
   }
 
-  const video = document.querySelector("#reader video");
-  if (video) {
-    video.classList.toggle("digital-zoom-2", targetZoom >= 2);
-    updateZoomButtons(targetZoom);
-  }
-
+  // Fallback: croppe réellement l'image haute définition avant décodage.
+  digitalZoom = targetZoom >= 2 ? 2 : 1;
+  video?.classList.toggle("digital-zoom-2", digitalZoom === 2);
+  updateZoomButtons(digitalZoom);
   $("scannerStatus").textContent =
-    targetZoom >= 2
-      ? "Chrome ne donne pas accès au zoom matériel : aperçu agrandi en 2×. Utilise « Mise au point » si l’image est floue."
-      : "Zoom 1×.";
+    digitalZoom === 2
+      ? "Zoom 2× logiciel actif : le centre de l’image est agrandi aussi pour le lecteur de code-barres."
+      : "Zoom 1× actif.";
 }
 
 async function refocusCamera() {
@@ -576,64 +655,129 @@ async function refocusCamera() {
   }
 
   const caps = getCameraCapabilities();
-  const focusModes = Array.isArray(caps.focusMode) ? caps.focusMode : [];
+  const modes = Array.isArray(caps.focusMode) ? caps.focusMode : [];
 
   try {
-    if (focusModes.includes("single-shot")) {
+    if (modes.includes("single-shot")) {
       await applyTrackConstraints({ advanced: [{ focusMode: "single-shot" }] });
       $("scannerStatus").textContent = "Mise au point relancée.";
-      setTimeout(() => enableContinuousFocus(), 700);
+      setTimeout(() => enableContinuousFocus(), 650);
       return;
     }
-
-    if (focusModes.includes("continuous")) {
+    if (modes.includes("continuous")) {
       await applyTrackConstraints({ advanced: [{ focusMode: "continuous" }] });
       $("scannerStatus").textContent = "Autofocus continu activé.";
       return;
     }
   } catch (error) {
-    console.warn("Autofocus non pilotable", error);
+    console.warn("Autofocus direct indisponible", error);
   }
 
-  $("scannerStatus").textContent = "Je relance la caméra pour forcer une nouvelle mise au point…";
+  // Un redémarrage du flux force généralement Android à refaire l'autofocus.
+  $("scannerStatus").textContent = "Nouvelle mise au point…";
   await stopScanner();
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  await new Promise((resolve) => setTimeout(resolve, 180));
   await startScanner();
 }
 
-async function scanBarcodePhoto(file) {
-  if (!file || !window.Html5Qrcode) return;
+function scheduleDecode() {
+  clearTimeout(scanTimer);
+  if (!scannerRunning) return;
+  scanTimer = setTimeout(decodeCurrentFrame, 110);
+}
 
-  $("scannerStatus").textContent = "Analyse de la photo du code-barres…";
+async function decodeCurrentFrame() {
+  if (!scannerRunning || scanBusy) {
+    scheduleDecode();
+    return;
+  }
+
+  const video = $("cameraVideo");
+  const canvas = $("scanCanvas");
+  const reader = zxingReader();
+
+  if (!video || !canvas || !reader || video.readyState < 2 || !video.videoWidth) {
+    scheduleDecode();
+    return;
+  }
+
+  scanBusy = true;
 
   try {
+    const sourceW = video.videoWidth;
+    const sourceH = video.videoHeight;
+    const zoom = digitalZoom >= 2 ? 2 : 1;
+    const cropW = sourceW / zoom;
+    const cropH = sourceH / zoom;
+    const sx = (sourceW - cropW) / 2;
+    const sy = (sourceH - cropH) / 2;
+
+    const targetW = Math.min(1280, Math.max(640, Math.round(cropW)));
+    const targetH = Math.round(targetW * (cropH / cropW));
+    canvas.width = targetW;
+    canvas.height = targetH;
+
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(video, sx, sy, cropW, cropH, 0, 0, targetW, targetH);
+
+    const result = reader.decodeFromCanvas(canvas);
+    const code = result?.getText?.() || result?.text;
+    if (code) {
+      await stopScanner();
+      $("scannerDialog").close();
+      lookupBarcode(String(code));
+      return;
+    }
+  } catch (error) {
+    // "Not found" between frames is normal during live scanning.
+  } finally {
+    scanBusy = false;
+  }
+
+  scheduleDecode();
+}
+
+async function scanBarcodePhoto(file) {
+  if (!file || !zxingReader()) return;
+  $("scannerStatus").textContent = "Analyse de la photo du code-barres…";
+
+  const url = URL.createObjectURL(file);
+  try {
     await stopScanner();
-    scanner = new Html5Qrcode("reader");
-    const decodedText = await scanner.scanFile(file, true);
-    try { await scanner.clear(); } catch {}
-    scanner = null;
+    const result = await zxingReader().decodeFromImageUrl(url);
+    const decodedText = result?.getText?.() || result?.text;
+    if (!decodedText) throw new Error("Code non reconnu");
     $("scannerDialog").close();
-    lookupBarcode(decodedText);
+    lookupBarcode(String(decodedText));
   } catch (error) {
     console.error(error);
-    try { await scanner?.clear(); } catch {}
-    scanner = null;
-    $("scannerStatus").textContent = "Code non reconnu sur la photo. Recadre au plus près du code, évite les reflets et réessaie.";
+    $("scannerStatus").textContent =
+      "Code non reconnu sur la photo. Prends la photo plus près, bien nette et sans reflet.";
     toast("Code-barres non reconnu sur la photo.");
   } finally {
+    URL.revokeObjectURL(url);
     const input = $("barcodePhotoInput");
     if (input) input.value = "";
   }
 }
 
 async function stopScanner() {
-  if (scanner && scannerRunning) {
-    try { await scanner.stop(); } catch {}
-  }
+  clearTimeout(scanTimer);
+  scanTimer = null;
+  scanBusy = false;
   scannerRunning = false;
-  const reader = $("reader");
-  if (reader) reader.innerHTML = "";
-  scanner = null;
+
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+  }
+
+  const video = $("cameraVideo");
+  if (video) {
+    try { video.pause(); } catch {}
+    video.srcObject = null;
+    video.classList.remove("digital-zoom-2");
+  }
 }
 
 $("scanBtn").addEventListener("click", startScanner);
