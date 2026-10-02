@@ -68,13 +68,6 @@
         </button>
       </div>
 
-      <form id="barcodeForm" class="barcode-form">
-        <label for="barcodeInput">Ou saisir le code-barres</label>
-        <div class="inline">
-          <input id="barcodeInput" inputmode="numeric" autocomplete="off" placeholder="EAN / UPC">
-          <button class="btn btn-small" type="submit">Chercher</button>
-        </div>
-      </form>
     </section>
 
     <section class="card goals-card">
@@ -84,6 +77,13 @@
         <p class="goals-text">Une alimentation équilibrée pour plus d’énergie au quotidien.</p>
       </div>
       <span class="arrow">›</span>
+    </section>
+
+    <section class="motivation-card" aria-label="Motivation">
+      <div class="motivation-copy">De bons choix<br>aujourd’hui,<br>un vous plus fort<br>demain.</div>
+      <div class="motivation-art" aria-hidden="true">
+        <span>🥦</span><span>🥑</span><span>🥬</span>
+      </div>
     </section>
 
     <section class="section">
@@ -109,10 +109,15 @@
       <p id="composeHint">Ajoute au moins un aliment.</p>
     </section>
 
-    <section id="recommendationSection" class="section" hidden>
-      <div class="section-title">
+    <section id="recommendationSection" class="section recommendation-screen" hidden>
+      <div class="recommendation-topbar">
+        <button id="recommendationBackBtn" class="back-btn" type="button" aria-label="Retour">‹</button>
+        <strong>Mon repas recommandé</strong>
+        <span class="sparkle">✣</span>
+      </div>
+      <div class="section-title recommendation-heading">
         <div>
-          <p class="eyebrow">Mon repas recommandé</p>
+          <p class="eyebrow">Suggestion</p>
           <h2>Un repas équilibré et nourrissant</h2>
         </div>
       </div>
@@ -133,6 +138,7 @@
         </div>
         <p id="recommendationNote" class="muted"></p>
         <button id="validateMealBtn" class="btn btn-primary btn-confirm">✓ J’ai mangé ce repas</button>
+        <button id="adjustMealBtn" class="btn btn-secondary btn-adjust" type="button">✎ Ajuster les quantités</button>
       </div>
     </section>
 
@@ -169,6 +175,22 @@
       <div class="scan-corners" aria-hidden="true"></div>
     </div>
     <p id="scannerStatus" class="muted">Autorise la caméra puis vise le code EAN/UPC.</p>
+
+    <form id="barcodeForm" class="barcode-form scanner-barcode">
+      <label for="barcodeInput">Ou saisir le code-barres</label>
+      <div class="inline">
+        <input id="barcodeInput" inputmode="numeric" autocomplete="off" placeholder="EAN / UPC">
+        <button class="btn btn-small" type="submit">Chercher</button>
+      </div>
+    </form>
+
+    <div class="scanner-detected">
+      <div class="scanner-detected-head">
+        <strong>Produits détectés</strong>
+        <span id="scannerDetectedCount" class="count-badge">0</span>
+      </div>
+      <div id="scannerFoodList" class="scanner-food-list"></div>
+    </div>
   </dialog>
 
   <dialog id="productDialog" class="modal">
