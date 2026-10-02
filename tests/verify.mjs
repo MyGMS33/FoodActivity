@@ -61,6 +61,8 @@ assert((await page.locator("#calorieProgress").textContent()).includes("2200"), 
 // Vérification récupération Open Food Facts via un appel réseau simulé.
 await page.locator("#scanBtn").click();
 await page.locator("#scannerDialog").waitFor({ state: "visible" });
+await page.waitForTimeout(400);
+await page.screenshot({ path: "artifacts/01b-scanner-empty.png", fullPage: true });
 await page.locator("#barcodeInput").fill("1234567890123");
 await page.locator("#barcodeForm button[type=submit]").click();
 await page.locator("#productDialog").waitFor({ state: "visible" });
@@ -92,6 +94,13 @@ assert((await page.locator(".food-item").count()) === 3, "Les trois aliments ne 
 assert(!(await page.locator("#composeBtn").isDisabled()), "Composer mon repas reste désactivé");
 
 await page.screenshot({ path: "artifacts/02-products.png", fullPage: true });
+
+await page.locator("#scanBtn").click();
+await page.locator("#scannerDialog").waitFor({ state: "visible" });
+await page.waitForTimeout(300);
+assert((await page.locator(".scanner-food-mini").count()) === 3, "La liste des produits détectés n'apparaît pas dans le scanner");
+await page.screenshot({ path: "artifacts/02b-scanner-products.png", fullPage: true });
+await page.locator('[data-dialog="scannerDialog"]').click();
 
 await page.locator("#composeBtn").click();
 await page.locator("#recommendationSection").waitFor({ state: "visible" });
