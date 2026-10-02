@@ -176,6 +176,18 @@
     </div>
     <p id="scannerStatus" class="muted">Autorise la caméra puis vise le code EAN/UPC.</p>
 
+    <div class="small-barcode-tools">
+      <div id="zoomControl" class="zoom-control" hidden>
+        <label for="scannerZoom">Zoom caméra <strong id="zoomValue">1×</strong></label>
+        <input id="scannerZoom" type="range" min="1" max="1" step="0.1" value="1">
+      </div>
+      <label class="photo-scan-btn">
+        📷 Photographier un petit code-barres
+        <input id="barcodePhotoInput" type="file" accept="image/*" capture="environment">
+      </label>
+      <p class="scan-tip">Petit code sur un bocal : évite les reflets, garde le code le plus plat possible et remplis presque toute la largeur du cadre.</p>
+    </div>
+
     <form id="barcodeForm" class="barcode-form scanner-barcode">
       <label for="barcodeInput">Ou saisir le code-barres</label>
       <div class="inline">
