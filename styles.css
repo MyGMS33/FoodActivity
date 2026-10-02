@@ -756,3 +756,35 @@ body.recommendation-mode #recommendationSection {
   font-size: 11px;
   line-height: 1.45;
 }
+
+
+.camera-tools {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #181d20;
+}
+.camera-tools label {
+  color: #dfe4e1;
+  font-size: 12px;
+  font-weight: 700;
+}
+.camera-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #111517;
+  color: var(--text);
+}
+.camera-action-row {
+  display: grid;
+  grid-template-columns: 68px 68px 1fr;
+  gap: 8px;
+}
+.camera-action {
+  min-height: 44px;
+}
