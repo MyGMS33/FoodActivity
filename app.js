@@ -453,15 +453,24 @@ async function startScanner() {
   }
 
   $("scannerDialog").showModal();
-  $("scannerStatus").textContent = "Démarrage de la caméra…";
+  $("scannerStatus").textContent = "Démarrage de la caméra haute définition…";
+  $("zoomControl").hidden = true;
 
   try {
     scanner = scanner || new Html5Qrcode("reader");
     if (scannerRunning) return;
 
     await scanner.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 280, height: 150 } },
+      {
+        facingMode: "environment",
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
+      },
+      {
+        fps: 15,
+        qrbox: { width: 320, height: 140 },
+        aspectRatio: 1.777778
+      },
       async (decodedText) => {
         if (!scannerRunning) return;
         await stopScanner();
@@ -472,11 +481,78 @@ async function startScanner() {
     );
 
     scannerRunning = true;
-    $("scannerStatus").textContent = "Vise le code EAN/UPC. Le scan est automatique.";
+    $("scannerStatus").textContent = "Vise le code. Pour un petit code-barres, rapproche-toi progressivement et utilise le zoom si disponible.";
+    setupCameraZoom();
   } catch (error) {
     console.error(error);
     scannerRunning = false;
-    $("scannerStatus").textContent = "Caméra inaccessible. Vérifie l’autorisation ou saisis le code manuellement.";
+    $("scannerStatus").textContent = "Caméra inaccessible. Tu peux photographier le code-barres ou saisir ses chiffres.";
+  }
+}
+
+function getCameraTrack() {
+  const video = document.querySelector("#reader video");
+  return video?.srcObject?.getVideoTracks?.()[0] || null;
+}
+
+function setupCameraZoom() {
+  const track = getCameraTrack();
+  const control = $("zoomControl");
+  const slider = $("scannerZoom");
+  const value = $("zoomValue");
+
+  if (!track || !control || !slider || !value || !track.getCapabilities) return;
+
+  const caps = track.getCapabilities();
+  const zoom = caps?.zoom;
+  if (!zoom || !Number.isFinite(zoom.min) || !Number.isFinite(zoom.max) || zoom.max <= zoom.min) {
+    control.hidden = true;
+    return;
+  }
+
+  const startZoom = Math.min(Math.max(2, zoom.min), zoom.max);
+  slider.min = String(zoom.min);
+  slider.max = String(zoom.max);
+  slider.step = String(zoom.step || 0.1);
+  slider.value = String(startZoom);
+  value.textContent = `${round(startZoom, 1)}×`;
+  control.hidden = false;
+
+  track.applyConstraints({ advanced: [{ zoom: startZoom }] }).catch(() => {});
+
+  slider.oninput = async () => {
+    const next = Number(slider.value);
+    value.textContent = `${round(next, 1)}×`;
+    try {
+      await track.applyConstraints({ advanced: [{ zoom: next }] });
+    } catch (error) {
+      console.warn("Zoom camera non pris en charge", error);
+    }
+  };
+}
+
+async function scanBarcodePhoto(file) {
+  if (!file || !window.Html5Qrcode) return;
+
+  $("scannerStatus").textContent = "Analyse de la photo du code-barres…";
+
+  try {
+    await stopScanner();
+    scanner = new Html5Qrcode("reader");
+    const decodedText = await scanner.scanFile(file, true);
+    try { await scanner.clear(); } catch {}
+    scanner = null;
+    $("scannerDialog").close();
+    lookupBarcode(decodedText);
+  } catch (error) {
+    console.error(error);
+    try { await scanner?.clear(); } catch {}
+    scanner = null;
+    $("scannerStatus").textContent = "Code non reconnu sur la photo. Recadre au plus près du code, évite les reflets et réessaie.";
+    toast("Code-barres non reconnu sur la photo.");
+  } finally {
+    const input = $("barcodePhotoInput");
+    if (input) input.value = "";
   }
 }
 
@@ -492,6 +568,14 @@ async function stopScanner() {
 
 $("scanBtn").addEventListener("click", startScanner);
 $("manualBtn").addEventListener("click", () => openProductDialog());
+
+const barcodePhotoInput = $("barcodePhotoInput");
+if (barcodePhotoInput) {
+  barcodePhotoInput.addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (file) scanBarcodePhoto(file);
+  });
+}
 
 $("barcodeForm").addEventListener("submit", (event) => {
   event.preventDefault();
