@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#171a1f">
+  <meta name="theme-color" content="#111416">
   <meta name="description" content="Scanne tes aliments et compose automatiquement les portions de ton repas.">
   <title>FoodActivity</title>
   <link rel="manifest" href="./manifest.webmanifest">
@@ -12,39 +12,60 @@
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <p class="eyebrow">Aujourd’hui</p>
-      <h1>FoodActivity</h1>
+    <div class="brand-wrap">
+      <h1 class="brand"><span>Food</span><span>Activity</span></h1>
+      <p class="tagline">Mieux manger. Plus loin.</p>
     </div>
-    <button id="settingsBtn" class="icon-btn" aria-label="Réglages">⚙️</button>
+    <button id="settingsBtn" class="icon-btn" aria-label="Réglages">⚙</button>
   </header>
 
   <main>
-    <section class="card summary-card">
-      <div class="summary-head">
-        <div>
-          <span class="muted">Calories</span>
+    <section class="dashboard">
+      <div class="card daily-card">
+        <div class="daily-copy">
+          <p class="daily-label">▣ Aujourd’hui</p>
           <strong id="calorieProgress">0 / 2000 kcal</strong>
         </div>
-        <div class="pill" id="mealCounter">0 repas</div>
+        <div class="ring-wrap" aria-hidden="true">
+          <div class="ring"><span id="ringPercent">0%</span></div>
+        </div>
+        <div class="progress" aria-hidden="true"><span id="calorieBar"></span></div>
       </div>
-      <div class="progress"><span id="calorieBar"></span></div>
 
-      <div class="macro-grid">
-        <div><span>Protéines</span><strong id="proteinProgress">0 / 120 g</strong></div>
-        <div><span>Fibres</span><strong id="fiberProgress">0 / 30 g</strong></div>
-        <div><span>Restant</span><strong id="remainingCalories">2000 kcal</strong></div>
+      <div class="metric-grid">
+        <article class="metric-card">
+          <div class="metric-icon orange">🔥</div>
+          <span>Calories</span>
+          <strong id="metricCalories">0 / 2000</strong>
+          <small>kcal</small>
+        </article>
+        <article class="metric-card">
+          <div class="metric-icon green">🏋</div>
+          <span>Protéines</span>
+          <strong id="proteinProgress">0 / 120 g</strong>
+          <small>g</small>
+        </article>
+        <article class="metric-card">
+          <div class="metric-icon green">🍃</div>
+          <span>Fibres</span>
+          <strong id="fiberProgress">0 / 30 g</strong>
+          <small>g</small>
+        </article>
       </div>
     </section>
 
     <section class="hero card">
-      <p class="eyebrow">Repas en cours</p>
-      <h2>Qu’est-ce que tu as devant toi ?</h2>
-      <p class="muted">Scanne plusieurs conserves, corrige le poids égoutté si besoin, puis laisse FoodActivity calculer les quantités.</p>
-
       <div class="primary-actions">
-        <button id="scanBtn" class="btn btn-primary">📷 Scanner un produit</button>
-        <button id="manualBtn" class="btn btn-secondary">＋ Ajouter manuellement</button>
+        <button id="scanBtn" class="btn btn-primary btn-hero">
+          <span class="scan-mark">⌗</span>
+          <span>Scanner un produit</span>
+          <span class="arrow">›</span>
+        </button>
+        <button id="manualBtn" class="btn btn-secondary btn-hero">
+          <span class="plus-mark">＋</span>
+          <span>Ajouter manuellement</span>
+          <span class="arrow">›</span>
+        </button>
       </div>
 
       <form id="barcodeForm" class="barcode-form">
@@ -56,10 +77,19 @@
       </form>
     </section>
 
+    <section class="card goals-card">
+      <div class="goals-icon">▥</div>
+      <div>
+        <p class="goals-title">Vos objectifs</p>
+        <p class="goals-text">Une alimentation équilibrée pour plus d’énergie au quotidien.</p>
+      </div>
+      <span class="arrow">›</span>
+    </section>
+
     <section class="section">
       <div class="section-title">
         <div>
-          <p class="eyebrow">Disponibles</p>
+          <p class="eyebrow">Repas en cours</p>
           <h2 id="selectedTitle">0 aliment</h2>
         </div>
         <button id="clearSelectionBtn" class="text-btn" hidden>Vider</button>
@@ -71,18 +101,29 @@
     </section>
 
     <section class="sticky-compose">
-      <button id="composeBtn" class="btn btn-compose" disabled>✨ Composer mon repas</button>
+      <button id="composeBtn" class="btn btn-compose" disabled>
+        <span>🍲</span>
+        <span>Composer mon repas</span>
+        <span class="arrow">›</span>
+      </button>
       <p id="composeHint">Ajoute au moins un aliment.</p>
     </section>
 
     <section id="recommendationSection" class="section" hidden>
       <div class="section-title">
         <div>
-          <p class="eyebrow">Proposition</p>
-          <h2>Portions recommandées</h2>
+          <p class="eyebrow">Mon repas recommandé</p>
+          <h2>Un repas équilibré et nourrissant</h2>
         </div>
       </div>
       <div class="card recommendation-card">
+        <div class="recommendation-intro">
+          <div class="leaf-badge">🍃</div>
+          <div>
+            <strong>Suggestion adaptée à tes objectifs</strong>
+            <p>Basée sur les produits que tu as devant toi et ce qu’il te reste à manger aujourd’hui.</p>
+          </div>
+        </div>
         <div id="recommendationList"></div>
         <div class="nutrition-total">
           <div><span>Calories</span><strong id="recKcal">0</strong></div>
@@ -91,7 +132,7 @@
           <div><span>Sel</span><strong id="recSalt">0 g</strong></div>
         </div>
         <p id="recommendationNote" class="muted"></p>
-        <button id="validateMealBtn" class="btn btn-primary">✓ J’ai mangé ce repas</button>
+        <button id="validateMealBtn" class="btn btn-primary btn-confirm">✓ J’ai mangé ce repas</button>
       </div>
     </section>
 
@@ -107,15 +148,26 @@
     </section>
   </main>
 
-  <dialog id="scannerDialog" class="modal">
+  <nav class="bottom-nav" aria-label="Navigation principale">
+    <button class="nav-item active"><span>⌂</span><small>Accueil</small></button>
+    <button class="nav-item"><span>◷</span><small>Historique</small></button>
+    <button class="nav-item"><span>💡</span><small>Conseils</small></button>
+    <button class="nav-item"><span>●</span><small>Profil</small></button>
+  </nav>
+
+  <dialog id="scannerDialog" class="modal scanner-modal">
     <div class="modal-head">
+      <button class="back-btn close-dialog" data-dialog="scannerDialog" aria-label="Fermer">‹</button>
       <div>
         <p class="eyebrow">Caméra</p>
-        <h2>Scanner le code-barres</h2>
+        <h2>Scanner un produit</h2>
       </div>
-      <button class="icon-btn close-dialog" data-dialog="scannerDialog" aria-label="Fermer">✕</button>
+      <span class="help-dot">?</span>
     </div>
-    <div id="reader" class="reader"></div>
+    <div class="scan-frame-wrap">
+      <div id="reader" class="reader"></div>
+      <div class="scan-corners" aria-hidden="true"></div>
+    </div>
     <p id="scannerStatus" class="muted">Autorise la caméra puis vise le code EAN/UPC.</p>
   </dialog>
 
