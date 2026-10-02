@@ -86,8 +86,16 @@ function renderSummary() {
   $("calorieProgress").textContent = `${Math.round(used.kcal)} / ${state.settings.calories} kcal`;
   $("proteinProgress").textContent = `${round(used.protein)} / ${state.settings.protein} g`;
   $("fiberProgress").textContent = `${round(used.fiber)} / ${state.settings.fiber} g`;
-  $("remainingCalories").textContent = `${Math.round(remaining)} kcal`;
-  $("mealCounter").textContent = `${meals.length} repas`;
+  const metricCalories = $("metricCalories");
+  if (metricCalories) metricCalories.textContent = `${Math.round(used.kcal)} / ${state.settings.calories}`;
+  const ringPercent = $("ringPercent");
+  if (ringPercent) ringPercent.textContent = `${Math.round(pct)}%`;
+  const ring = document.querySelector(".ring");
+  if (ring) ring.style.setProperty("--ring", `${pct}%`);
+  const remainingCalories = $("remainingCalories");
+  if (remainingCalories) remainingCalories.textContent = `${Math.round(remaining)} kcal`;
+  const mealCounter = $("mealCounter");
+  if (mealCounter) mealCounter.textContent = `${meals.length} repas`;
   $("calorieBar").style.width = `${pct}%`;
 }
 
