@@ -59,6 +59,8 @@ await page.locator("#settingsForm button[type=submit]").click();
 assert((await page.locator("#calorieProgress").textContent()).includes("2200"), "Objectif calories non mis à jour");
 
 // Vérification récupération Open Food Facts via un appel réseau simulé.
+await page.locator("#scanBtn").click();
+await page.locator("#scannerDialog").waitFor({ state: "visible" });
 await page.locator("#barcodeInput").fill("1234567890123");
 await page.locator("#barcodeForm button[type=submit]").click();
 await page.locator("#productDialog").waitFor({ state: "visible" });
@@ -66,6 +68,7 @@ assert((await page.locator("#editName").inputValue()) === "Lentilles test", "Nom
 assert((await page.locator("#editAvailable").inputValue()) === "750", "Poids produit OFF non récupéré");
 assert((await page.locator("#editKcal").inputValue()) === "92", "Calories OFF non récupérées");
 await page.locator('[data-dialog="productDialog"]').click();
+await page.locator('[data-dialog="scannerDialog"]').click();
 
 async function addFood(food) {
   await page.locator("#manualBtn").click();
@@ -92,6 +95,7 @@ await page.screenshot({ path: "artifacts/02-products.png", fullPage: true });
 
 await page.locator("#composeBtn").click();
 await page.locator("#recommendationSection").waitFor({ state: "visible" });
+assert(await page.locator("body").evaluate(el => el.classList.contains("recommendation-mode")), "Le mode recommandation dédié n'est pas actif");
 assert((await page.locator(".rec-row").count()) >= 1, "Aucune portion recommandée");
 const kcalText = await page.locator("#recKcal").textContent();
 assert(/\d+ kcal/.test(kcalText), "Total calorique recommandé absent");
@@ -101,6 +105,7 @@ await page.screenshot({ path: "artifacts/03-recommendation.png", fullPage: true 
 await page.locator("#validateMealBtn").click();
 await page.waitForTimeout(150);
 assert((await page.locator(".history-item").count()) === 1, "Le repas n'est pas enregistré dans l'historique");
+assert(!(await page.locator("body").evaluate(el => el.classList.contains("recommendation-mode"))), "Le mode recommandation reste actif après validation");
 const beforeReload = await page.locator("#calorieProgress").textContent();
 
 await page.reload({ waitUntil: "domcontentloaded" });
